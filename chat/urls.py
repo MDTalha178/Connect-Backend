@@ -1,9 +1,11 @@
 from django.urls import re_path
-from .consumer import ChatConsumer, UserConsumer
+
+from .Consumer.ChatConsumer import ChatConsumer
 
 from django.urls import path, include
 from rest_framework import routers
 
+from .Consumer.UserConsumer import UserConsumer
 from .views import ChatListViewSet
 
 router = routers.DefaultRouter()

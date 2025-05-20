@@ -1,4 +1,4 @@
-from authentication.user_repository import UserRepository
+from authentication.Repository.UserRepository import UserRepository
 from common.interface import VerificationInterface
 
 
@@ -12,9 +12,16 @@ class EmailOtpVerificationStrategy(VerificationInterface):
             'email_verification_otp': data['otp'],
             'email': data['email']
         }
-        if self.user_repo.get_data(**verification_dict):
+
+        user_obj = self.user_repo.get(**verification_dict)
+        if user_obj:
+            self.update_verification_process(user_obj)
             return True
+
         return False
+
+    def update_verification_process(self, user_obj):
+        self.user_repo.update(user_obj, email_verification_otp=None, email_verified=True)
 
 
 class SMSOtpVerificationStrategy(VerificationInterface):

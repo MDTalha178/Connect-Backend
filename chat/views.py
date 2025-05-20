@@ -4,16 +4,16 @@ from rest_framework.decorators import action
 
 from authentication.models import User
 from authentication.serializer import GetUserSerializer
-from authentication.user_repository import UserRepository
+from authentication.Repository.UserRepository import UserRepository
 from chat.models import ChatConfig, ChatMessage
-from chat.serializer import GetChatListSerializer, GetChatSerializer
+from chat.serializer import GetChatListSerializer, GetChatSerializer, CreateChatSerializer
 from common.permission import AuthenticationPermission
 from common.utils import CustomModelView
 
 
 # Create your views here.
 class ChatListViewSet(CustomModelView):
-    http_method_names = ('get',)
+    http_method_names = ('get', 'post',)
     permission_classes = (AuthenticationPermission,)
     queryset = ChatConfig
     serializer_class = GetChatListSerializer
@@ -65,8 +65,20 @@ class ChatListViewSet(CustomModelView):
             serializer_class=GetUserSerializer)
     def get_user_list(self, request, *args, **kwargs):
         try:
-            user = self.user_repo.get_data().exclude(id=self.request.user.id)
+            user = self.user_repo.filter().exclude(id=self.request.user.id)
             serializer = self.serializer_class(user, many=True, context={'user_id': self.request.user.id})
             return self.success_response(data=serializer.data)
+        except Exception as e:
+            return self.failure_response(data={'error': e})
+
+    @action(methods=['post'], detail=False, url_path='create-chat', url_name='create-chat',
+            serializer_class=CreateChatSerializer)
+    def create_chat(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data, context={'user_id': self.request.user.id})
+            if serializer.is_valid():
+                data = serializer.save()
+                data = GetChatListSerializer(data, many=False, context={'user_id': self.request.user.id})
+                return self.success_response(data=data.data, message="Chat Created Successfully!")
         except Exception as e:
             return self.failure_response(data={'error': e})

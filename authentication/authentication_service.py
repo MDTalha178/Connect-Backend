@@ -1,7 +1,7 @@
 from typing import Optional
 from rest_framework import status
 from authentication.token import AuthTokenInterface, JWTTokenAuthService
-from authentication.user_repository import UserRepository
+from authentication.Repository.UserRepository import UserRepository
 from common.utils import CustomAPIResponseMixin
 
 
@@ -38,7 +38,7 @@ class AuthenticationService:
             )
 
         try:
-            request.user = self.user_repo.get_by_id(user_id)
+            request.user = self.user_repo.get(id=user_id)
         except Exception:
             return self.response.failure_response(
                 data={'error': 'User not found'},

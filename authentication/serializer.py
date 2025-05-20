@@ -4,12 +4,13 @@ from django.core.validators import MinLengthValidator, MaxLengthValidator
 from rest_framework import serializers
 from authentication.exception import ApplicationException
 from authentication.models import User
-from authentication.user_repository import UserRepository
-from authentication.verification_strategy import EmailOtpVerificationStrategy
-from common.data_object_layer import DataObjectLayerInterface
+from authentication.Repository.UserRepository import UserRepository
+from chat.Services.ChatConfigurationService import ChatConfigurationService
+from common.Interface.DataObjectLayer import DataObjectLayerInterface
+from common.contstant import COMMUNICATION_MODE
 from common.factory import VerificationFactory
-from common.generate_otp import GenerateDigitOTPStrategy
-from common.interface import VerificationInterface, GenerateOTPInterface
+from common.Generate import GenerateDigitStrategy
+from common.interface import VerificationInterface, GenerateInterface
 
 
 class SignupSerializer(serializers.ModelSerializer):
@@ -30,26 +31,31 @@ class SignupSerializer(serializers.ModelSerializer):
         min_length=10
     )
 
-    def __init__(self, generate_otp_service: GenerateOTPInterface = GenerateDigitOTPStrategy(),
+    def __init__(self,
+                 generate_otp_service: GenerateInterface = GenerateDigitStrategy(),
                  user_repo: DataObjectLayerInterface = UserRepository(),
                  *args, **kwargs):
 
-        self.generate_otp_service: GenerateOTPInterface = generate_otp_service
+        self.generate_otp_service: GenerateInterface = generate_otp_service
         self.user_repo = user_repo
         super().__init__(**kwargs)
 
     def validate_phone(self, value):
         try:
-            self.user_repo.user_by_phone(phone=value)
+            self.user_repo.get(phone=value)
             raise serializers.ValidationError("Pone Number is already exists!")
         except ApplicationException as a:
+            return value
+        except Exception as e:
             return value
 
     def validate_email(self, value):
         try:
-            self.user_repo.get_by_email(value)
+            self.user_repo.get(email=value)
             raise serializers.ValidationError("Email is already exists!")
         except ApplicationException as a:
+            return value
+        except Exception as e:
             return value
 
     def create(self, validated_data):
@@ -58,7 +64,7 @@ class SignupSerializer(serializers.ModelSerializer):
             validated_data['email_verification_otp'] = self.generate_otp_service.generate_otp()
 
             if self.user_repo.create(validated_data):
-                user_obj = self.user_repo.user_by_phone(validated_data['phone'])
+                user_obj = self.user_repo.get(phone=validated_data['phone'])
                 return user_obj
         except ApplicationException as application_error:
             raise serializers.ValidationError(application_error)
@@ -77,26 +83,26 @@ class LoginSerializer(serializers.ModelSerializer):
 
     )
 
-    def __init__(self, generate_otp_service: GenerateOTPInterface = GenerateDigitOTPStrategy(),
+    def __init__(self, generate_otp_service: GenerateInterface = GenerateDigitStrategy(),
                  user_repo: DataObjectLayerInterface = UserRepository(),
                  *args, **kwargs):
-        self.generate_otp_service: GenerateOTPInterface = generate_otp_service
+        self.generate_otp_service: GenerateInterface = generate_otp_service
         self.user_repo = user_repo
         super().__init__(**kwargs)
 
     def validate_email(self, value):
         try:
-            self.user_repo.get_by_email(value)
+            self.user_repo.get(email=value)
             return value
         except ApplicationException as application_error:
             raise serializers.ValidationError(application_error)
 
     def validate(self, attrs):
         try:
-            user_obj = self.user_repo.get_by_email(attrs.get('email'))
+            user_obj = self.user_repo.get(email=attrs.get('email'))
             if user_obj:
                 attrs['user_obj'] = user_obj
-                self.user_repo.save_user_otp(user_obj.id, self.generate_otp_service.generate_otp())
+                self.user_repo.update(user_obj, email_verification_otp=self.generate_otp_service.generate())
             else:
                 raise serializers.ValidationError("Invalid user")
         except ApplicationException as application_error:
@@ -123,7 +129,7 @@ class VerificationSerializer(serializers.ModelSerializer):
 
     )
     verification_type = serializers.ChoiceField(
-        choices=['SMS', 'EMAIL'], required=True, allow_null=False
+        choices=COMMUNICATION_MODE, allow_null=False, default='EMAIL'
     )
 
     def __init__(self, *args, **kwargs):
@@ -132,11 +138,6 @@ class VerificationSerializer(serializers.ModelSerializer):
         self.user_repo = UserRepository()
         super().__init__(*args, **kwargs)
 
-    def validate_email(self, email):
-        if self.user_repo.get_by_email(email):
-            return email
-        raise serializers.ValidationError('Invalid Email!')
-
     def validate(self, attrs):
         if self.verification_strategy.verification(attrs):
             return attrs
@@ -144,9 +145,8 @@ class VerificationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         try:
-            user_obj = self.user_repo.get_by_email(validated_data['email'])
+            user_obj = self.user_repo.get(email=validated_data['email'])
             if user_obj:
-                self.user_repo.update({'id': user_obj.id, 'email_verification_otp': None, 'email_verified': True})
                 return user_obj
         except Exception as e:
             raise serializers.ValidationError("Something Went Wrong!")

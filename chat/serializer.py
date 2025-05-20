@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from authentication.serializer import GetUserSerializer
+from chat.Services.ChatConfigurationService import ChatConfigurationService
 from chat.models import ChatMessage, ChatConfig
 
 
@@ -57,3 +58,31 @@ class GetChatListSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatConfig
         fields = ('id', 'profile', 'last_message', 'chat_room_name', 'sender', 'sender', 'unread_count')
+
+
+class CreateChatSerializer(serializers.ModelSerializer):
+    participant_ids = serializers.ListSerializer(
+        child=serializers.CharField(),
+        required=True, allow_null=False, allow_empty=False
+    )
+    is_group_chat = serializers.BooleanField(
+        default=False
+    )
+
+    def __init__(self, chat_config_service=ChatConfigurationService(), **kwargs):
+        self.chat_config_service = chat_config_service
+        super().__init__(**kwargs)
+
+    def create(self, validated_data):
+        try:
+            participant_ids: list = validated_data['participant_ids']
+            participant_ids.append(str(self.context.get('user_id')))
+            validated_data['participant_ids'] = participant_ids
+            chat_config_instance = self.chat_config_service.create_chat(**validated_data)
+            return chat_config_instance
+        except Exception as e:
+            raise serializers.ValidationError("Something went wrong")
+
+    class Meta:
+        model = ChatConfig
+        fields = ('participant_ids', 'is_group_chat',)
