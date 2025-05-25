@@ -5,7 +5,6 @@ from chat.Services.ChatSettingService import ChatSettingService
 class ChatPinSerializerValidation:
 
     def __init__(self, validation=None, context=None):
-        print("Validation constructor called")
         self.validation = validation or dict()
         self.chat_setting_service = ChatSettingService()
         self.context = context or {}
@@ -15,7 +14,6 @@ class ChatPinSerializerValidation:
 
     def __call__(self, data):
 
-        print("Call called")
         # Pin Validation
         if 'chat_pin_validation' in self.validation:
             self.validate_chat_pin(
