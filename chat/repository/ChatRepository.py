@@ -23,4 +23,4 @@ class ChatRepository(AsyncDataAccessService):
         if self.chat_user_service.user_repo.get(id=receiver_id, online_status=OnlineStatus.ONLINE):
             self.filter(
                 chat_config__chat_room_name=group_name, read_at__isnull=True
-            ).exclude(sender_id=receiver_id).update(read_at=datetime.datetime.now())
+            ).exclude(sender_id=sender_id).update(read_at=datetime.datetime.now())

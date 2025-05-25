@@ -6,11 +6,12 @@ from django.urls import path, include
 from rest_framework import routers
 
 from .Consumer.UserConsumer import UserConsumer
-from .views import ChatListViewSet
+from .views import ChatListViewSet, ChatActionViewSet
 
 router = routers.DefaultRouter()
 
 router.register('chat-list', ChatListViewSet, basename='chat_list')
+router.register('chat-action', ChatActionViewSet, basename='chat-action')
 
 urlpatterns = [
     path(r'chat/', include(router.urls)),

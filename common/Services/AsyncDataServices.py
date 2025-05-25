@@ -35,3 +35,7 @@ class AsyncDataAccessService(DataObjectLayerInterface):
     @database_sync_to_async
     def delete(self, instance):
         instance.delete()
+
+    @database_sync_to_async
+    def idempotent_update(self, idempotent, **kwargs):
+        pass

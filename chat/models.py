@@ -15,6 +15,19 @@ class ChatConfig(models.Model):
     participant = models.ManyToManyField(User, related_name='user_chat_config_set')
 
 
+class ChatSetting(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    chat_config = models.ForeignKey(ChatConfig, on_delete=models.CASCADE, related_name='chat_setting_config_set')
+    action_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_setting_action_by_set')
+    action_for = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_setting_action_for_set')
+    chat_mute = models.BooleanField(default=False)
+    chat_block = models.BooleanField(default=False)
+    is_chat_pin_set = models.BooleanField(default=False)
+    chat_pin = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class UserRole(Enum):
     Admin = "Admin"
     Member = "Member"

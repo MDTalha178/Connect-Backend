@@ -26,3 +26,7 @@ class DataObjectLayerInterface(Generic[T], ABC):
     @abstractmethod
     def delete(self, id: str) -> bool:
         raise NotImplementedError("Sub class should have to implement this")
+
+    @abstractmethod
+    def idempotent_update(self, idempotent, **kwargs):
+        raise NotImplementedError("Sub class should have to implement this")

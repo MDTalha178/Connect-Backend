@@ -1,12 +1,14 @@
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, PermissionDenied
 
 from authentication.models import User
 from authentication.serializer import GetUserSerializer
 from authentication.Repository.UserRepository import UserRepository
 from chat.models import ChatConfig, ChatMessage
-from chat.serializer import GetChatListSerializer, GetChatSerializer, CreateChatSerializer
+from chat.serializer import GetChatListSerializer, GetChatSerializer, CreateChatSerializer, MuteChatSerializer, \
+    GetMuteSerializer, UnMuteChatSerializer, ChatPinSerializer
 from common.permission import AuthenticationPermission
 from common.utils import CustomModelView
 
@@ -25,7 +27,7 @@ class ChatListViewSet(CustomModelView):
     def get_queryset(self):
         queryset = self.queryset.objects.filter(
             participant=self.request.user
-        ).order_by('-created_at')
+        ).order_by('-updated_at')
         return queryset
 
     def list(self, request, *args, **kwargs):
@@ -54,8 +56,11 @@ class ChatListViewSet(CustomModelView):
             serializer = self.serializer_class(chat_messages, many=True,
                                                context={'user_id': self.request.user.id})
 
+            chat_config_data = GetChatListSerializer(chat_config, many=False).data
+
             return self.success_response(
-                data=serializer.data, online_status=chat_config.other_participants[0].online_status
+                data=serializer.data, online_status=chat_config.other_participants[0].online_status,
+                chat_config=chat_config_data
             )
         except Exception as e:
             print(e)
@@ -82,3 +87,66 @@ class ChatListViewSet(CustomModelView):
                 return self.success_response(data=data.data, message="Chat Created Successfully!")
         except Exception as e:
             return self.failure_response(data={'error': e})
+
+
+class ChatActionViewSet(CustomModelView):
+    http_method_names = ('post',)
+
+    @action(methods=['post'], detail=False, url_path='mute-chat', url_name='mute_chat',
+            serializer_class=MuteChatSerializer)
+    def mute_chat(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data, context={'user_id': self.request.user.id})
+            if serializer.is_valid():
+                chat_setting = serializer.save()
+                chat_setting_data = GetMuteSerializer(chat_setting).data
+                return self.success_response(data=chat_setting_data, message="Chat Muted Successfully!")
+
+        except NotFound as not_found:
+            return self.failure_response(data=str(not_found), message='Unable to  Mute Chat!')
+
+        except PermissionDenied as permission:
+            return self.failure_response(data=str(permission), message='Unable to  Mute Chat!')
+
+        except Exception as e:
+            return self.failure_response(data={"error": str(e)}, message="Something Went Wrong")
+
+    @action(methods=['post'], detail=False, url_path='un-mute-chat', url_name='un_mute_chat',
+            serializer_class=UnMuteChatSerializer)
+    def un_mute_chat(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data, context={'user_id': self.request.user.id})
+            if serializer.is_valid():
+                chat_setting = serializer.save()
+                chat_setting_data = GetMuteSerializer(chat_setting).data
+                return self.success_response(data=chat_setting_data, message="Chat Muted Successfully!")
+
+        except NotFound as not_found:
+            return self.failure_response(data=str(not_found), message='Unable to  UnMute Chat!')
+
+        except PermissionDenied as permission:
+            return self.failure_response(data=str(permission), message='Unable to  UnMute Chat!')
+
+        except Exception as e:
+            return self.failure_response(data={"error": str(e)}, message="Something Went Wrong")
+
+    @action(methods=['post'], detail=False, url_path='set-chat-pin', url_name='set-chat-pin',
+            serializer_class=ChatPinSerializer)
+    def create_chat_pin(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data, context={'user_id': self.request.user.id})
+            if serializer.is_valid():
+                chat_setting = serializer.save()
+                chat_setting_data = GetMuteSerializer(chat_setting).data
+                return self.success_response(data=chat_setting_data, message="M-pin Set Successfully!")
+            
+            return self.failure_response(data=serializer.errors, message='Unable to set M-pin Chat!')
+
+        except NotFound as not_found:
+            return self.failure_response(data=str(not_found), message='Unable to set M-pin Chat!')
+
+        except PermissionDenied as permission:
+            return self.failure_response(data=str(permission), message='Unable to set M-pin Chat!')
+
+        except Exception as e:
+            return self.failure_response(data={"error": str(e)}, message="Something Went Wrong")

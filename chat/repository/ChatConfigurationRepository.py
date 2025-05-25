@@ -15,3 +15,8 @@ class ChatConfigurationRepository(DataAccessService):
         chat_config_instance.participant.add(*participant_ids)
         chat_config_instance.save()
         return chat_config_instance
+
+    @staticmethod
+    def get_participant_list(chat_config: ChatConfig):
+        participant_list = list(chat_config.participant.values_list('id', flat=True))
+        return list(map(lambda part_id: str(part_id), participant_list))

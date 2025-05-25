@@ -6,3 +6,4 @@ class UserRepository(DataAccessService):
 
     def __init__(self, **kwargs):
         super().__init__(User)
+

@@ -1,3 +1,4 @@
+from chat.Services.ChatConfigurationService import ChatConfigurationService
 from chat.Services.ChatServices import ChatServices
 from common.interface import SubscriberInterface, PublisherInterface
 
@@ -8,6 +9,7 @@ class ReadAndUnreadSubscriber(SubscriberInterface):
         self.channel_layer = channel_layer
         self.group_name = group_name
         self.chat_service = ChatServices()
+        self.chat_config = ChatConfigurationService()
 
         self.room_id = room_id
 
@@ -24,4 +26,8 @@ class ReadAndUnreadSubscriber(SubscriberInterface):
         await self.chat_service.update_read_un_read_count(
             self.room_id, event['sender_id'], event['receiver_id']
         )
+
+        # chat list update
+        await self.chat_config.update_chat_list(**event)
+
 

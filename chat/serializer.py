@@ -1,8 +1,10 @@
 from rest_framework import serializers
-
+from rest_framework.exceptions import PermissionDenied, NotFound
 from authentication.serializer import GetUserSerializer
 from chat.Services.ChatConfigurationService import ChatConfigurationService
-from chat.models import ChatMessage, ChatConfig
+from chat.Services.ChatSettingService import ChatSettingService
+from chat.models import ChatMessage, ChatConfig, ChatSetting
+from chat.Validation.SerializerValidation.ChatPinSerializerValidation import ChatPinSerializerValidation
 
 
 class GetChatSerializer(serializers.ModelSerializer):
@@ -19,11 +21,18 @@ class GetChatSerializer(serializers.ModelSerializer):
         fields = ('id', 'messages', 'sender', 'is_sender', 'created_at',)
 
 
+class GetMuteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatSetting
+        fields = ('id', 'chat_config', 'action_by', 'action_for', 'chat_mute', 'chat_block', 'is_chat_pin_set',)
+
+
 class GetChatListSerializer(serializers.ModelSerializer):
     profile = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     sender = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
+    is_chat_mute = serializers.SerializerMethodField()
 
     def get_sender(self, obj):
         return str(self.context.get('user_id', ''))
@@ -55,9 +64,24 @@ class GetChatListSerializer(serializers.ModelSerializer):
             sender__id=user_id
         ).count()
 
+    def get_is_chat_mute(self, obj):
+        chat_setting_service = ChatSettingService()
+        login_user = self.context.get('user_id')
+        participant = obj.participant.all().exclude(id=login_user)
+        chat_setting = chat_setting_service.chat_setting_repo.get(
+            chat_config_id=obj.id,
+            action_by_id=login_user,
+            action_for_id=participant[0].id
+        )
+        if chat_setting:
+            return GetMuteSerializer(chat_setting, many=False).data
+        return None
+
     class Meta:
         model = ChatConfig
-        fields = ('id', 'profile', 'last_message', 'chat_room_name', 'sender', 'sender', 'unread_count')
+        fields = ('id', 'profile', 'last_message', 'chat_room_name', 'sender', 'sender',
+                  'unread_count', 'is_chat_mute',
+                  )
 
 
 class CreateChatSerializer(serializers.ModelSerializer):
@@ -86,3 +110,117 @@ class CreateChatSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatConfig
         fields = ('participant_ids', 'is_group_chat',)
+
+
+class MuteChatSerializer(serializers.ModelSerializer):
+    target_user_id = serializers.CharField(
+        required=True, allow_blank=False, allow_null=False
+    )
+    chat_config = serializers.CharField(
+        required=True, allow_blank=False, allow_null=False
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.chat_setting_service = ChatSettingService()
+        self.chat_config_service = ChatConfigurationService()
+
+    def validate(self, attrs):
+        chat_config = self.chat_config_service.chat_config_repo.get(
+            id=attrs.get('chat_config'),
+        )
+
+        if not chat_config:
+            raise NotFound(
+                detail="Chat Configuration ID Not Found!"
+            )
+
+        participant_list = self.chat_config_service.get_participant_list(chat_config)
+
+        if str(self.context.get('user_id')) not in participant_list:
+            raise PermissionDenied(
+                detail="User is not Authorized to Mute this chat!",
+            )
+
+        if attrs.get('target_user_id') not in participant_list:
+            raise NotFound(
+                detail='Target ID Not Found',
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        try:
+            chat_setting = self.chat_setting_service.mute_chat(
+                str(self.context.get('user_id')), validated_data.get('target_user_id'),
+                validated_data.get('chat_config')
+            )
+            return chat_setting
+        except Exception as e:
+            raise serializers.ValidationError(e)
+
+    class Meta:
+        model = ChatSetting
+        fields = ('target_user_id', 'chat_config',)
+
+
+class UnMuteChatSerializer(MuteChatSerializer):
+
+    def create(self, validated_data):
+        try:
+            chat_setting = self.chat_setting_service.un_mute_chat(
+                str(self.context.get('user_id')),
+                validated_data.get('target_user_id'),
+                validated_data.get('chat_config')
+            )
+            return chat_setting
+
+        except NotFound as not_found:
+            raise NotFound(
+                "Chat Configuration is Invalid!"
+            )
+        except Exception as e:
+            raise serializers.ValidationError(e)
+
+    class Meta:
+        model = ChatSetting
+        fields = ('target_user_id', 'chat_config',)
+
+
+class ChatPinSerializer(MuteChatSerializer):
+    chat_pin = serializers.IntegerField(
+        required=True, allow_null=False
+    )
+    confirm_chat_pin = serializers.IntegerField(
+        required=True, allow_null=True
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        for validator in self.Meta.validators:
+            if isinstance(validator, ChatPinSerializerValidation):
+                validator.context = self.context
+
+    def create(self, validated_data):
+        try:
+            chat_setting = self.chat_setting_service.set_chat_pin(
+                str(self.context.get('user_id')),
+                validated_data.get('target_user_id'),
+                validated_data.get('chat_config'),
+                validated_data.get('chat_pin')
+            )
+            return chat_setting
+        except Exception as e:
+            raise serializers.ValidationError("Something went Wrong")
+
+    class Meta:
+        model = ChatSetting
+        fields = ('target_user_id', 'chat_config', 'chat_pin', 'confirm_chat_pin')
+        validators = [
+            ChatPinSerializerValidation(
+                validation={'chat_pin_validation'},
+            )
+        ]
+        extra_kwargs = {
+            'confirm_chat_pin': {'write_only': True}
+        }

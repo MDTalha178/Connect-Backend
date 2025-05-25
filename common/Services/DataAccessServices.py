@@ -34,3 +34,12 @@ class DataAccessService(DataObjectLayerInterface):
     def delete(self, instance) -> bool:
         instance.delete()
         return True
+
+    def idempotent_update(self, idempotent: dict, **kwargs):
+        instance, _ = self.model.objects.update_or_create(
+            **idempotent,
+            defaults={
+                **kwargs
+            }
+        )
+        return instance
