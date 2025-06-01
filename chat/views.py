@@ -8,7 +8,8 @@ from authentication.serializer import GetUserSerializer
 from authentication.Repository.UserRepository import UserRepository
 from chat.models import ChatConfig, ChatMessage
 from chat.serializer import GetChatListSerializer, GetChatSerializer, CreateChatSerializer, MuteChatSerializer, \
-    GetMuteSerializer, UnMuteChatSerializer, ChatPinSerializer
+    GetMuteSerializer, UnMuteChatSerializer, ChatPinSerializer, VerifyChatPinSerializer, RemovePinSerializer, \
+    BlockUnblockSerializerUser
 from common.permission import AuthenticationPermission
 from common.utils import CustomModelView
 
@@ -147,6 +148,73 @@ class ChatActionViewSet(CustomModelView):
 
         except PermissionDenied as permission:
             return self.failure_response(data=str(permission), message='Unable to set M-pin Chat!')
+
+        except Exception as e:
+            return self.failure_response(data={"error": str(e)}, message="Something Went Wrong")
+
+    @action(methods=['post'], detail=False, url_path='verify-chat-pin', url_name='verify-chat-pin',
+            serializer_class=VerifyChatPinSerializer)
+    def verify_chat_pin(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data, context={'user_id': self.request.user.id})
+            if serializer.is_valid():
+                return self.success_response(
+                    data={"Chat": "Chat m-Pin verify successfully!"}, message="M-pin verify Successfully!"
+                )
+
+            return self.failure_response(data=serializer.errors, message='Unable to verify M-pin!')
+
+        except NotFound as not_found:
+            return self.failure_response(data=str(not_found), message='Unable to verify  M-pin!')
+
+        except PermissionDenied as permission:
+            return self.failure_response(data=str(permission), message='Unable to verify M-pin!')
+
+        except Exception as e:
+            return self.failure_response(data={"error": str(e)}, message="Something Went Wrong")
+
+    @action(methods=['post'], detail=False, url_path='delete-chat-pin', url_name='delete-chat-pin',
+            serializer_class=RemovePinSerializer)
+    def delete_chat_pin(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data, context={'user_id': self.request.user.id})
+            if serializer.is_valid():
+                chat_setting = serializer.save()
+                chat_setting_data = GetMuteSerializer(chat_setting).data
+                return self.success_response(
+                    data=chat_setting_data, message="M-pin delete Successfully!"
+                )
+
+            return self.failure_response(data=serializer.errors, message='Unable to delete M-pin!')
+
+        except NotFound as not_found:
+            return self.failure_response(data=str(not_found), message='Unable to delete  M-pin!')
+
+        except PermissionDenied as permission:
+            return self.failure_response(data=str(permission), message='Unable to delete M-pin!')
+
+        except Exception as e:
+            return self.failure_response(data={"error": str(e)}, message="Something Went Wrong")
+
+    @action(methods=['post'], detail=False, url_path='block-unblock-user', url_name='block-unblock-user',
+            serializer_class=BlockUnblockSerializerUser)
+    def block_and_unblock_user(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data, context={'user_id': self.request.user.id})
+            if serializer.is_valid():
+                chat_setting = serializer.save()
+                chat_setting_data = GetMuteSerializer(chat_setting).data
+                return self.success_response(
+                    data=chat_setting_data, message="Block or Unblock successfully"
+                )
+
+            return self.failure_response(data=serializer.errors, message='Unable to Block or Unblock!')
+
+        except NotFound as not_found:
+            return self.failure_response(data=str(not_found), message='Unable to Block or Unblock')
+
+        except PermissionDenied as permission:
+            return self.failure_response(data=str(permission), message='Unable to Block or Unblock')
 
         except Exception as e:
             return self.failure_response(data={"error": str(e)}, message="Something Went Wrong")

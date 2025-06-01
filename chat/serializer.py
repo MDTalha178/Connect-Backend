@@ -24,7 +24,8 @@ class GetChatSerializer(serializers.ModelSerializer):
 class GetMuteSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatSetting
-        fields = ('id', 'chat_config', 'action_by', 'action_for', 'chat_mute', 'chat_block', 'is_chat_pin_set',)
+        fields = (
+            'id', 'chat_config', 'action_by', 'action_for', 'chat_mute', 'chat_block', 'is_chat_pin_set', 'chat_pin')
 
 
 class GetChatListSerializer(serializers.ModelSerializer):
@@ -68,7 +69,7 @@ class GetChatListSerializer(serializers.ModelSerializer):
         chat_setting_service = ChatSettingService()
         login_user = self.context.get('user_id')
         participant = obj.participant.all().exclude(id=login_user)
-        chat_setting = chat_setting_service.chat_setting_repo.get(
+        chat_setting = chat_setting_service.get_chat_setting_repo().get(
             chat_config_id=obj.id,
             action_by_id=login_user,
             action_for_id=participant[0].id
@@ -112,7 +113,7 @@ class CreateChatSerializer(serializers.ModelSerializer):
         fields = ('participant_ids', 'is_group_chat',)
 
 
-class MuteChatSerializer(serializers.ModelSerializer):
+class ChatActionBaseSerializer(serializers.ModelSerializer):
     target_user_id = serializers.CharField(
         required=True, allow_blank=False, allow_null=False
     )
@@ -149,6 +150,9 @@ class MuteChatSerializer(serializers.ModelSerializer):
 
         return attrs
 
+
+class MuteChatSerializer(ChatActionBaseSerializer):
+
     def create(self, validated_data):
         try:
             chat_setting = self.chat_setting_service.mute_chat(
@@ -164,7 +168,7 @@ class MuteChatSerializer(serializers.ModelSerializer):
         fields = ('target_user_id', 'chat_config',)
 
 
-class UnMuteChatSerializer(MuteChatSerializer):
+class UnMuteChatSerializer(ChatActionBaseSerializer):
 
     def create(self, validated_data):
         try:
@@ -187,7 +191,7 @@ class UnMuteChatSerializer(MuteChatSerializer):
         fields = ('target_user_id', 'chat_config',)
 
 
-class ChatPinSerializer(MuteChatSerializer):
+class ChatPinSerializer(ChatActionBaseSerializer):
     chat_pin = serializers.IntegerField(
         required=True, allow_null=False
     )
@@ -199,7 +203,7 @@ class ChatPinSerializer(MuteChatSerializer):
         super().__init__(**kwargs)
         for validator in self.Meta.validators:
             if isinstance(validator, ChatPinSerializerValidation):
-                validator.context = self.context
+                validator.set_context(self.context)
 
     def create(self, validated_data):
         try:
@@ -224,3 +228,75 @@ class ChatPinSerializer(MuteChatSerializer):
         extra_kwargs = {
             'confirm_chat_pin': {'write_only': True}
         }
+
+
+class VerifyChatPinSerializer(ChatActionBaseSerializer):
+    chat_pin = serializers.CharField(
+        required=True, allow_null=False, allow_blank=False
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        # Set the context
+        for validator in self.Meta.validators:
+            if isinstance(validator, ChatPinSerializerValidation):
+                validator.set_context(self.context)
+
+    class Meta:
+        model = ChatSetting
+        fields = ('target_user_id', 'chat_config', 'chat_pin')
+        validators = [
+            ChatPinSerializerValidation(
+                validation={'verify_pin_validation'},
+            )
+        ]
+
+
+class RemovePinSerializer(VerifyChatPinSerializer):
+
+    def create(self, validated_data):
+        try:
+            instance = self.chat_setting_service.delete_chat_pin(
+                str(self.context.get('user_id')),
+                validated_data.get('target_user_id'),
+                validated_data.get('chat_config'),
+            )
+            return instance
+        except Exception as e:
+            raise serializers.ValidationError("Something went wrong at this moment")
+
+    class Meta:
+        model = ChatSetting
+        fields = ('target_user_id', 'chat_config', 'chat_pin')
+        validators = [
+            ChatPinSerializerValidation(
+                validation={'verify_pin_validation'},
+            )
+        ]
+
+
+class  BlockUnblockSerializerUser(ChatActionBaseSerializer):
+    reason = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+    action_type = serializers.BooleanField(
+        default=True
+    )
+
+    def create(self, validated_data):
+        try:
+            instance = self.chat_setting_service.block_and_unlock_user(
+                str(self.context.get('user_id')),
+                validated_data.get('target_user_id'),
+                validated_data.get('chat_config'),
+                validated_data.get('action_type', True),
+                validated_data.get('reason', '')
+            )
+            return instance
+        except Exception as e:
+            raise serializers.ValidationError("Something went wrong at this moment")
+
+    class Meta:
+        model = ChatSetting
+        fields = ('target_user_id', 'chat_config', 'reason', 'action_type',)

@@ -40,5 +40,29 @@ class ChatSettingRepository(DataAccessService):
         )
         return instance
 
-    def block_and_unblock_chat(self):
-        pass
+    def delete_chat(self, user_id, target_user_id, chat_config):
+        instance = self.idempotent_update(
+            {'action_by_id': user_id, 'chat_config_id': chat_config},
+            action_for_id=target_user_id,
+            chat_pin=None,
+            is_chat_pin_set=False
+        )
+        if instance:
+            return instance
+
+        raise NotFound(
+            detail='Chat Pin not found in our system',
+        )
+
+    def block_and_unblock_chat(self, user_id, target_user_id, chat_config, action_type, reason):
+        instance = self.idempotent_update(
+            {'action_by_id': user_id, 'chat_config_id': chat_config},
+            action_for_id=target_user_id,
+            chat_block=action_type
+        )
+        if instance:
+            return instance
+
+        raise NotFound(
+            detail='Chat Configuration ID Not Found!',
+        )
